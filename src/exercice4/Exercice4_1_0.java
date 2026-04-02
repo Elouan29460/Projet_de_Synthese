@@ -45,9 +45,12 @@ public class Exercice4_1_0 {
 
 		// Initialisation des references : on leur ajoute les primitives qu'elles
 		// comprenent
-		//
-		// <A VOUS DE CODER>
-		//
+		spaceRef.addCommand("setColor", new SetColor());
+		spaceRef.addCommand("sleep", new Sleep());
+
+		robiRef.addCommand("setColor", new SetColor());
+		robiRef.addCommand("translate", new Translate());
+		robiRef.addCommand("setDim", new SetDim());
 
 		// Enrigestrement des references dans l'environement par leur nom
 		environment.addReference("space", spaceRef);
@@ -75,7 +78,11 @@ public class Exercice4_1_0 {
 			// execution des s-expressions compilees
 			Iterator<SNode> itor = compiled.iterator();
 			while (itor.hasNext()) {
-				this.run((SNode) itor.next());
+				try {
+					this.run((SNode) itor.next());
+				} catch (Exception e) {
+					System.out.println("Erreur : " + e.getMessage());
+				}
 			}
 		}
 	}

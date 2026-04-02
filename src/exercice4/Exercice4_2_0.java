@@ -88,8 +88,8 @@ public class Exercice4_2_0 {
 		spaceRef.addCommand("setColor", new SetColor());
 		spaceRef.addCommand("sleep", new Sleep());
 
-		spaceRef.addCommand("add", new AddElement());
-		spaceRef.addCommand("del", new DelElement());
+		spaceRef.addCommand("add", new AddElement(environment));
+		spaceRef.addCommand("del", new DelElement(environment));
 		
 		rectClassRef.addCommand("new", new NewElement());
 		ovalClassRef.addCommand("new", new NewElement());
@@ -124,7 +124,11 @@ public class Exercice4_2_0 {
 			// execution des s-expressions compilees
 			Iterator<SNode> itor = compiled.iterator();
 			while (itor.hasNext()) {
-				new Interpreter().compute(environment, itor.next());
+				try {
+					new Interpreter().compute(environment, itor.next());
+				} catch (Exception e) {
+					System.out.println("Erreur : " + e.getMessage());
+				}
 			}
 		}
 	}
