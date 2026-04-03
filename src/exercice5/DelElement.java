@@ -1,4 +1,4 @@
-package exercice4;
+package exercice5;
 
 import graphicLayer.GContainer;
 import graphicLayer.GElement;
@@ -13,10 +13,13 @@ public class DelElement implements Command {
 
 	@Override
 	public Reference run(Reference receiver, SNode method) {
+		String receiverName = method.get(0).contents();
 		String name = method.get(2).contents();
-		Reference ref = environment.getReferenceByName(name);
+		String fullName = receiverName + "." + name;
+
+		Reference ref = environment.getReferenceByName(fullName);
 		if (ref == null) {
-			throw new RuntimeException("Référence inconnue : " + name);
+			throw new RuntimeException("Référence inconnue : " + fullName);
 		}
 		Object container = receiver.getReceiver();
 		Object element = ref.getReceiver();
@@ -24,7 +27,8 @@ public class DelElement implements Command {
 			((GContainer) container).removeElement((GElement) element);
 			((GContainer) container).repaint();
 		}
-		environment.removeReference(name);
+		environment.removeReference(fullName);
+		environment.removeReferencesStartingWith(fullName + ".");
 		return receiver;
 	}
 }

@@ -1,4 +1,4 @@
-package exercice4;
+package exercice5;
 
 import java.awt.Image;
 import java.io.File;

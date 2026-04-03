@@ -1,4 +1,4 @@
-package exercice4;
+package exercice5;
 
 import graphicLayer.GString;
 import stree.parser.SNode;

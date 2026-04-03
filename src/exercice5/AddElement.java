@@ -1,4 +1,4 @@
-package exercice4;
+package exercice5;
 
 import graphicLayer.GContainer;
 import graphicLayer.GElement;
@@ -13,7 +13,9 @@ public class AddElement implements Command {
 
 	@Override
 	public Reference run(Reference receiver, SNode method) {
+		String receiverName = method.get(0).contents();
 		String name = method.get(2).contents();
+		String fullName = receiverName + "." + name;
 
 		SNode newExpr = method.get(3);
 		String className = newExpr.get(0).contents();
@@ -21,13 +23,18 @@ public class AddElement implements Command {
 		Reference classRef = environment.getReferenceByName(className);
 		Reference newRef = classRef.run(newExpr);
 
+		if (newRef.getReceiver() instanceof GContainer) {
+			newRef.addCommand("add", new AddElement(environment));
+			newRef.addCommand("del", new DelElement(environment));
+		}
+
 		Object container = receiver.getReceiver();
 		Object element = newRef.getReceiver();
 		if (container instanceof GContainer && element instanceof GElement) {
 			((GContainer) container).addElement((GElement) element);
 		}
 
-		environment.addReference(name, newRef);
+		environment.addReference(fullName, newRef);
 
 		return newRef;
 	}

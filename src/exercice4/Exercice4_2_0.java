@@ -118,7 +118,6 @@ public class Exercice4_2_0 {
 			try {
 				compiled = parser.parse(input);
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 			// execution des s-expressions compilees
