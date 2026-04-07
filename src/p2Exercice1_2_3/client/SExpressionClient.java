@@ -1,4 +1,4 @@
-package exercice7.client;
+package p2Exercice1_2_3.client;
 
 import java.awt.Dimension;
 import java.io.*;
@@ -11,8 +11,8 @@ import javax.swing.SwingUtilities;
 
 import stree.parser.SNode;
 import graphicLayer.*;
+import p2Exercice1_2_3.shared.SNodeSerializer;
 import exercice6.*;
-import exercice7.shared.SNodeSerializer;
 import tools.Tools;
 
 /**

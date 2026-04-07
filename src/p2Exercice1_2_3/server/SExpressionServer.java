@@ -1,4 +1,4 @@
-package exercice7.server;
+package p2Exercice1_2_3.server;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -17,7 +17,7 @@ import java.util.List;
 import javax.imageio.ImageIO;
 
 import graphicLayer.*;
-import exercice7.shared.*;
+import p2Exercice1_2_3.shared.*;
 
 /**
  * Serveur HTTP qui expose le parseur de S-Expressions.

@@ -1,6 +1,9 @@
+// ce fichier sert à construire les exercices 1 a 3 de la partie 2 du projet de synthese (client, server, shared) et les tests associés
+// il fait La Gestion des Sources, les Dépendances, les Tests (JUnit 5), la Couverture (JaCoCo), l'Analyse statique (Checkstyle et SpotBugs) et le Rapport global (buildDashboard).
+
 // =============================================================================
-// build.gradle — Projet Robi, exercice 7 (Client-Serveur + CI/CD)
-// Compatible Java 11+. Ajouter ce fichier à la racine du projet Robi.
+// build.gradle — Projet Robi,  part2ex1/2/3 (Client-Serveur + CI/CD)
+// Compatible Java 11+.
 // =============================================================================
 
 plugins {

@@ -1,10 +1,12 @@
-package exercice7.client;
+package p2Exercice1_2_3.client;
 
 import org.junit.jupiter.api.Test;
+
+import p2Exercice1_2_3.shared.SNodeSerializer;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.BeforeEach;
 import stree.parser.SNode;
-import exercice7.shared.SNodeSerializer;
 
 import java.io.IOException;
 import java.util.List;

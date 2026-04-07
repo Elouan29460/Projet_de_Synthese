@@ -1,4 +1,4 @@
-package exercice7.shared;
+package p2Exercice1_2_3.shared;
 
 import stree.parser.SNode;
 import java.util.List;

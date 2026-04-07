@@ -1,4 +1,4 @@
-package exercice7.client;
+package p2Exercice1_2_3.client;
 
 import javax.swing.*;
 import java.awt.*;

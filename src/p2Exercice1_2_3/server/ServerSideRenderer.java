@@ -1,4 +1,4 @@
-package exercice7.server;
+package p2Exercice1_2_3.server;
 
 import java.awt.Container;
 import java.awt.Dimension;
