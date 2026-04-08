@@ -1,186 +1,131 @@
-# =============================================================================
-# Pipeline CI/CD — Projet Robi (Exercices 1–7)
-# =============================================================================
-#
-# Étapes :
-#   1. compile   – compilation du projet (échec = arrêt immédiat)
-#   2. test      – tests unitaires JUnit 5
-#   3. coverage  – mesure de la couverture avec JaCoCo
-#   4. analyze   – analyse statique avec Checkstyle + SpotBugs
-#   5. report    – génération et publication du rapport qualité
-#
-# Branche protégée : merge requests sur `main` et `develop` bloquées
-# si les tests ou l'analyse échouent.
-# =============================================================================
+name: CI/CD Projet Robi
 
-image: eclipse-temurin:21-jdk
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+  workflow_dispatch: # Permet de lancer manuellement le pipeline
 
-# Variables globales
-variables:
+env:
   GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false"
-  GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
-  # Seuil minimal de couverture (en %) avant échec du pipeline
-  COVERAGE_THRESHOLD: "70"
+  COVERAGE_THRESHOLD: 70
 
-# Cache Gradle entre les jobs pour accélérer les builds
-cache:
-  key: "$CI_COMMIT_REF_SLUG"
-  paths:
-    - .gradle/
-    - build/
+jobs:
+  # ÉTAPE 1 & 2 : Build et Tests (Sur GitHub, on combine souvent pour profiter du cache)
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle' # Gère automatiquement le cache des dépendances
 
-# Ordre des étapes
-stages:
-  - compile
-  - test
-  - coverage
-  - analyze
-  - report
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
-# =============================================================================
-# ÉTAPE 1 — Compilation
-# =============================================================================
-compile:
-  stage: compile
-  script:
-    - echo "=== Compilation du projet ==="
-    - ./gradlew compileJava compileTestJava --stacktrace
-  artifacts:
-    paths:
-      - build/classes/
-      - build/generated/
-    expire_in: 1 hour
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "push"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      - name: Compile
+        run: ./gradlew compileJava compileTestJava --stacktrace
 
-# =============================================================================
-# ÉTAPE 2 — Tests unitaires
-# =============================================================================
-unit-tests:
-  stage: test
-  needs: [compile]
-  script:
-    - echo "=== Exécution des tests unitaires ==="
-    - ./gradlew test --stacktrace
-  artifacts:
-    when: always
-    reports:
-      junit: build/test-results/test/TEST-*.xml
-    paths:
-      - build/test-results/
-      - build/reports/tests/
-    expire_in: 1 week
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "push"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      - name: Run Unit Tests
+        run: ./gradlew test --stacktrace
 
-# =============================================================================
-# ÉTAPE 3 — Couverture de tests (JaCoCo)
-# =============================================================================
-coverage:
-  stage: coverage
-  needs: [unit-tests]
-  script:
-    - echo "=== Mesure de la couverture (JaCoCo) ==="
-    - ./gradlew jacocoTestReport jacocoTestCoverageVerification --stacktrace
-    # Extraction du taux de couverture pour l'afficher dans l'interface GitLab
-    - |
-      COVERAGE=$(grep -oP 'Total.*?(\d+)%' build/reports/jacoco/test/html/index.html \
-                 | tail -1 | grep -oP '\d+' | tail -1 || echo "0")
-      echo "Couverture : ${COVERAGE}%"
-      echo "COVERAGE=${COVERAGE}" >> coverage.env
-      if [ "$COVERAGE" -lt "$COVERAGE_THRESHOLD" ]; then
-        echo "ERREUR : couverture ${COVERAGE}% < seuil ${COVERAGE_THRESHOLD}%"
-        exit 1
-      fi
-  coverage: '/Couverture\s*:\s*(\d+)%/'
-  artifacts:
-    when: always
-    paths:
-      - build/reports/jacoco/
-    reports:
-      dotenv: coverage.env
-    expire_in: 1 week
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "push"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-results
+          path: build/test-results/test/
+          retention-days: 7
 
-# =============================================================================
-# ÉTAPE 4 — Analyse statique (Checkstyle + SpotBugs)
-# =============================================================================
-checkstyle:
-  stage: analyze
-  needs: [compile]
-  script:
-    - echo "=== Analyse Checkstyle ==="
-    - ./gradlew checkstyleMain checkstyleTest --stacktrace
-  artifacts:
-    when: always
-    paths:
-      - build/reports/checkstyle/
-    expire_in: 1 week
-  allow_failure: false
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "push"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  # ÉTAPE 3 : Couverture JaCoCo
+  coverage:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
 
-spotbugs:
-  stage: analyze
-  needs: [compile]
-  script:
-    - echo "=== Analyse SpotBugs ==="
-    - ./gradlew spotbugsMain spotbugsTest --stacktrace
-  artifacts:
-    when: always
-    paths:
-      - build/reports/spotbugs/
-    expire_in: 1 week
-  allow_failure: false
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "push"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      - name: JaCoCo Coverage & Verification
+        run: |
+          chmod +x gradlew
+          ./gradlew jacocoTestReport jacocoTestCoverageVerification --stacktrace
+          
+      - name: Check Coverage Threshold
+        run: |
+          # Extraction simple du pourcentage (adapte le chemin si nécessaire)
+          COVERAGE=$(grep -oP 'Total.*?(\d+)%' build/reports/jacoco/test/html/index.html | tail -1 | grep -oP '\d+' | tail -1 || echo "0")
+          echo "Couverture : ${COVERAGE}%"
+          if [ "$COVERAGE" -lt "$COVERAGE_THRESHOLD" ]; then
+            echo "ERREUR : couverture ${COVERAGE}% < seuil ${COVERAGE_THRESHOLD}%"
+            exit 1
+          fi
 
-# =============================================================================
-# ÉTAPE 5 — Rapport qualité consolidé
-# =============================================================================
-quality-report:
-  stage: report
-  needs: [unit-tests, coverage, checkstyle, spotbugs]
-  script:
-    - echo "=== Génération du rapport qualité ==="
-    - ./gradlew buildDashboard --stacktrace || true
-    - |
-      echo "=========================================="
-      echo "  RAPPORT QUALITÉ — ${CI_PROJECT_NAME}"
-      echo "  Commit : ${CI_COMMIT_SHORT_SHA}"
-      echo "  Branch : ${CI_COMMIT_REF_NAME}"
-      echo "  Date   : $(date '+%Y-%m-%d %H:%M:%S')"
-      echo "=========================================="
-      # Résumé des tests
-      TESTS_TOTAL=$(find build/test-results -name "*.xml" -exec grep -h 'tests=' {} \; \
-                    | grep -oP 'tests="\K[0-9]+' | awk '{s+=$1} END{print s}' || echo "?")
-      TESTS_FAIL=$(find build/test-results -name "*.xml" -exec grep -h 'failures=' {} \; \
-                   | grep -oP 'failures="\K[0-9]+' | awk '{s+=$1} END{print s}' || echo "?")
-      echo "  Tests   : ${TESTS_TOTAL} total, ${TESTS_FAIL} échec(s)"
-      echo "  Couverture : ${COVERAGE}%"
-      echo "=========================================="
-  artifacts:
-    when: always
-    paths:
-      - build/reports/
-    expire_in: 4 weeks
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "push"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      - name: Upload Coverage Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: build/reports/jacoco/
+          retention-days: 7
 
-# =============================================================================
-# Règles de protection de branche
-# Bloque le merge si le pipeline échoue sur main ou develop
-# =============================================================================
-workflow:
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
-    - if: '$CI_COMMIT_BRANCH == "develop"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH'
+  # ÉTAPE 4 : Analyses Statiques
+  static-analysis:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Run Checkstyle & SpotBugs
+        run: |
+          chmod +x gradlew
+          ./gradlew checkstyleMain checkstyleTest spotbugsMain spotbugsTest --stacktrace
+
+      - name: Upload Analysis Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-analysis-reports
+          path: |
+            build/reports/checkstyle/
+            build/reports/spotbugs/
+          retention-days: 7
+
+  # ÉTAPE 5 : Rapport Final
+  quality-report:
+    needs: [coverage, static-analysis]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+          
+      - name: Generate Dashboard
+        run: |
+          chmod +x gradlew
+          ./gradlew buildDashboard --stacktrace || true
+          echo "=== Rapport Qualité Généré ==="
+
+      - name: Upload Final Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-quality-report
+          path: build/reports/
+          retention-days: 28
