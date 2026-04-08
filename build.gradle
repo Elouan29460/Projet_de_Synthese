@@ -125,8 +125,13 @@ spotbugs {
     toolVersion = '4.8.3'
     ignoreFailures = true
     effort = 'max'
-    reportLevel.set('medium') 
-    excludeFilter = file("${rootDir}/config/spotbugs/exclude.xml")
+    // On a supprimé reportLevel pour stopper l'erreur "Cannot convert value"
+    
+    // On pointe vers le fichier dans le sous-dossier 'robi'
+    def excludeFile = file("Robi/exclude.xml")
+    if (excludeFile.exists()) {
+        excludeFilter = excludeFile
+    }
 }
 
 spotbugsMain {
