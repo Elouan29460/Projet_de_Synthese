@@ -5,14 +5,13 @@ on:
     branches: [ "main", "develop" ]
   pull_request:
     branches: [ "main", "develop" ]
-  workflow_dispatch: # Permet de lancer manuellement le pipeline
+  workflow_dispatch:
 
 env:
   GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false"
   COVERAGE_THRESHOLD: 70
 
 jobs:
-  # ÉTAPE 1 & 2 : Build et Tests (Sur GitHub, on combine souvent pour profiter du cache)
   build-and-test:
     runs-on: ubuntu-latest
     steps:
@@ -23,16 +22,16 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: 'gradle' # Gère automatiquement le cache des dépendances
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      # Remplace l'absence de wrapper et gère le cache
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
       - name: Compile
-        run: ./gradlew compileJava compileTestJava --stacktrace
+        run: gradle compileJava compileTestJava --stacktrace
 
       - name: Run Unit Tests
-        run: ./gradlew test --stacktrace
+        run: gradle test --stacktrace
 
       - name: Upload Test Results
         if: always()
@@ -42,7 +41,6 @@ jobs:
           path: build/test-results/test/
           retention-days: 7
 
-  # ÉTAPE 3 : Couverture JaCoCo
   coverage:
     needs: build-and-test
     runs-on: ubuntu-latest
@@ -52,21 +50,26 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: 'gradle'
+      
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
       - name: JaCoCo Coverage & Verification
-        run: |
-          chmod +x gradlew
-          ./gradlew jacocoTestReport jacocoTestCoverageVerification --stacktrace
+        run: gradle jacocoTestReport jacocoTestCoverageVerification --stacktrace
           
       - name: Check Coverage Threshold
         run: |
-          # Extraction simple du pourcentage (adapte le chemin si nécessaire)
-          COVERAGE=$(grep -oP 'Total.*?(\d+)%' build/reports/jacoco/test/html/index.html | tail -1 | grep -oP '\d+' | tail -1 || echo "0")
-          echo "Couverture : ${COVERAGE}%"
-          if [ "$COVERAGE" -lt "$COVERAGE_THRESHOLD" ]; then
-            echo "ERREUR : couverture ${COVERAGE}% < seuil ${COVERAGE_THRESHOLD}%"
-            exit 1
+          # On s'assure que le fichier existe avant le grep pour éviter un crash
+          REPORT_PATH="build/reports/jacoco/test/html/index.html"
+          if [ -f "$REPORT_PATH" ]; then
+            COVERAGE=$(grep -oP 'Total.*?(\d+)%' $REPORT_PATH | tail -1 | grep -oP '\d+' | tail -1 || echo "0")
+            echo "Couverture : ${COVERAGE}%"
+            if [ "$COVERAGE" -lt "$COVERAGE_THRESHOLD" ]; then
+              echo "ERREUR : couverture ${COVERAGE}% < seuil ${COVERAGE_THRESHOLD}%"
+              exit 1
+            fi
+          else
+            echo "Rapport JaCoCo introuvable, vérifiez la configuration du build.gradle"
           fi
 
       - name: Upload Coverage Report
@@ -77,7 +80,6 @@ jobs:
           path: build/reports/jacoco/
           retention-days: 7
 
-  # ÉTAPE 4 : Analyses Statiques
   static-analysis:
     needs: build-and-test
     runs-on: ubuntu-latest
@@ -87,12 +89,12 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: 'gradle'
+      
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
       - name: Run Checkstyle & SpotBugs
-        run: |
-          chmod +x gradlew
-          ./gradlew checkstyleMain checkstyleTest spotbugsMain spotbugsTest --stacktrace
+        run: gradle checkstyleMain checkstyleTest spotbugsMain spotbugsTest --stacktrace
 
       - name: Upload Analysis Reports
         if: always()
@@ -104,7 +106,6 @@ jobs:
             build/reports/spotbugs/
           retention-days: 7
 
-  # ÉTAPE 5 : Rapport Final
   quality-report:
     needs: [coverage, static-analysis]
     runs-on: ubuntu-latest
@@ -115,12 +116,13 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: 'gradle'
+      
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
           
       - name: Generate Dashboard
         run: |
-          chmod +x gradlew
-          ./gradlew buildDashboard --stacktrace || true
+          gradle buildDashboard --stacktrace || true
           echo "=== Rapport Qualité Généré ==="
 
       - name: Upload Final Reports
