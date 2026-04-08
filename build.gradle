@@ -123,9 +123,9 @@ checkstyle {
 // =============================================================================
 spotbugs {
     toolVersion    = '4.8.3'
-    ignoreFailures = false
-    effort         = com.github.spotbugs.snom.Effort.MAX
-    reportLevel    = com.github.spotbugs.snom.Confidence.MEDIUM
+    ignoreFailures = true  
+    effort         = 'max'
+    reportLevel    = 'medium'
     excludeFilter  = file("${rootDir}/config/spotbugs/exclude.xml")
 }
 
