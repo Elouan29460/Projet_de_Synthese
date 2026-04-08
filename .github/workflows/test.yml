@@ -122,7 +122,7 @@ jobs:
           
       - name: Generate Dashboard
         run: |
-          gradle buildDashboard --stacktrace || true
+          gradle projectReport --stacktrace || true
           echo "=== Rapport Qualité Généré ==="
 
       - name: Upload Final Reports
