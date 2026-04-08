@@ -25,8 +25,8 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle' # Gère automatiquement le cache des dépendances
 
-      - name: Grant execute permission for gradle
-        run: chmod +x gradle
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
       - name: Compile
         run: ./gradlew compileJava compileTestJava --stacktrace
