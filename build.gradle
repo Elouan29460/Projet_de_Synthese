@@ -122,11 +122,11 @@ checkstyle {
 // Analyse statique — SpotBugs
 // =============================================================================
 spotbugs {
-    toolVersion    = '4.8.3'
-    ignoreFailures = true  
-    effort         = 'max'
-    reportLevel    = 'medium'
-    excludeFilter  = file("${rootDir}/config/spotbugs/exclude.xml")
+    toolVersion = '4.8.3'
+    ignoreFailures = true
+    effort = 'max'
+    reportLevel.set('medium') 
+    excludeFilter = file("${rootDir}/config/spotbugs/exclude.xml")
 }
 
 spotbugsMain {
