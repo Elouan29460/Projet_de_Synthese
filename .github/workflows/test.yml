@@ -1,0 +1,133 @@
+name: CI/CD Projet Robi
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+  workflow_dispatch:
+
+env:
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false"
+  COVERAGE_THRESHOLD: 70
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # Remplace l'absence de wrapper et gère le cache
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Compile
+        run: gradle compileJava compileTestJava --stacktrace
+
+      - name: Run Unit Tests
+        run: gradle test --stacktrace
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-results
+          path: build/test-results/test/
+          retention-days: 7
+
+  coverage:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: JaCoCo Coverage & Verification
+        run: gradle jacocoTestReport jacocoTestCoverageVerification --stacktrace
+          
+      - name: Check Coverage Threshold
+        run: |
+          # On s'assure que le fichier existe avant le grep pour éviter un crash
+          REPORT_PATH="build/reports/jacoco/test/html/index.html"
+          if [ -f "$REPORT_PATH" ]; then
+            COVERAGE=$(grep -oP 'Total.*?(\d+)%' $REPORT_PATH | tail -1 | grep -oP '\d+' | tail -1 || echo "0")
+            echo "Couverture : ${COVERAGE}%"
+            if [ "$COVERAGE" -lt "$COVERAGE_THRESHOLD" ]; then
+              echo "ERREUR : couverture ${COVERAGE}% < seuil ${COVERAGE_THRESHOLD}%"
+              exit 1
+            fi
+          else
+            echo "Rapport JaCoCo introuvable, vérifiez la configuration du build.gradle"
+          fi
+
+      - name: Upload Coverage Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: build/reports/jacoco/
+          retention-days: 7
+
+  static-analysis:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Run Checkstyle & SpotBugs
+        run: gradle checkstyleMain checkstyleTest spotbugsMain spotbugsTest --stacktrace
+
+      - name: Upload Analysis Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-analysis-reports
+          path: |
+            build/reports/checkstyle/
+            build/reports/spotbugs/
+          retention-days: 7
+
+  quality-report:
+    needs: [coverage, static-analysis]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+          
+      - name: Generate Dashboard
+        run: |
+          gradle projectReport --stacktrace || true
+          echo "=== Rapport Qualité Généré ==="
+
+      - name: Upload Final Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-quality-report
+          path: build/reports/
+          retention-days: 28
