@@ -7,53 +7,41 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 
 import stree.parser.SNode;
+import stree.parser.SParser;
 import graphicLayer.*;
 import p2Exercice1_2_3.shared.SNodeSerializer;
 import exercice6.*;
 import tools.Tools;
 
-/**
- * Client de l'architecture client–serveur de l'exercice 7.
- *
- * Fonctionnement :
- *  1. Lit une S-Expression depuis l'entrée utilisateur.
- *  2. L'envoie en POST au serveur (http://localhost:8080/parse).
- *  3. Reçoit en retour les SNodes sérialisés en JSON.
- *  4. Désérialise les SNodes et les exécute localement avec l'interpréteur.
- *
- * Le rendu client s'affiche dans une fenêtre "[Client]" ;
- * le rendu serveur s'affiche simultanément dans une fenêtre "[Server]"
- * pour permettre la comparaison visuelle.
- *
- * L'URL du serveur est configurable via :
- *   -Dserver.url=http://host:port
- * ou le premier argument de main().
- */
 public class SExpressionClient {
-
     public static final String DEFAULT_SERVER_URL = "http://localhost:4444";
 
     private final String serverUrl;
     private final Environment environment;
     private final GSpace space;
+    private long localVersion = 0;
 
     public SExpressionClient(String serverUrl) {
         this.serverUrl = serverUrl;
+        this.space = new GSpace("Partie 2 ex1,2,3 - Rendu Client", new Dimension(500, 400));        
+        this.environment = new Environment();
 
-        // --- Fenêtre de rendu côté client ---
-        space = new GSpace("Exercice 7 - Rendu Client", new Dimension(400, 300));
-        space.open();
+        // 1. Initialisation de l'environnement (Commandes)
+        setupEnvironment();
 
-        // --- Environnement de l'interpréteur ---
-        environment = new Environment();
+        // 2. Lancement de l'unique Thread de synchro (vérifie toutes les secondes)
+        startAutoSyncThread();
+    }
 
-        Reference spaceRef       = new Reference(space);
-        Reference rectClassRef   = new Reference(GRect.class);
-        Reference ovalClassRef   = new Reference(GOval.class);
-        Reference imageClassRef  = new Reference(GImage.class);
+    private void setupEnvironment() {
+        Reference spaceRef = new Reference(space);
+        Reference rectClassRef = new Reference(GRect.class);
+        Reference ovalClassRef = new Reference(GOval.class);
+        Reference imageClassRef = new Reference(GImage.class);
         Reference stringClassRef = new Reference(GString.class);
 
         spaceRef.addCommand("setColor",  new SetColor());
@@ -76,121 +64,92 @@ public class SExpressionClient {
         environment.addReference("Label", stringClassRef);
     }
 
-    // -------------------------------------------------------------------------
-    // API publique
-    // -------------------------------------------------------------------------
+    private void startAutoSyncThread() {
+        Thread syncThread = new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(1000); 
+                    checkServerVersion();
+                } catch (Exception e) {
+                    System.err.println("[Sync] Serveur injoignable...");
+                }
+            }
+        });
+        syncThread.setDaemon(true);
+        syncThread.start();
+    }
 
-    /**
-     * Envoie une S-Expression au serveur, récupère les SNodes et les exécute.
-     *
-     * @param sExpression La S-Expression à traiter.
-     */
-    public void runScript(String sExpression) {
-        // 1. Envoyer au serveur et récupérer le JSON
-        String json;
-        try {
-            json = sendToServer(sExpression);
-        } catch (IOException e) {
-            System.err.println("[Client] Erreur réseau : " + e.getMessage());
-            return;
+    private void checkServerVersion() throws Exception {
+        URL url = java.net.URI.create(serverUrl + "/version").toURL();
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        if (conn.getResponseCode() == 200) {
+            String json = new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            long serverVersion = Long.parseLong(json.replaceAll("[^0-9]", ""));
+
+            if (serverVersion > localVersion) {
+                updateFromHistory();
+                localVersion = serverVersion;
+            }
         }
+    }
 
-        // 2. Désérialiser les SNodes
-        List<SNode> nodes;
-        try {
-            nodes = SNodeSerializer.fromJson(json);
-        } catch (Exception e) {
-            System.err.println("[Client] Erreur de désérialisation : " + e.getMessage());
-            return;
+    private void updateFromHistory() throws Exception {
+        URL url = java.net.URI.create(serverUrl + "/history").toURL();
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        if (conn.getResponseCode() == 200) {
+            String history = new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            SwingUtilities.invokeLater(() -> {
+                space.clear();
+                String[] lines = history.split("\n");
+                for (String line : lines) {
+                    if (!line.trim().isEmpty()) executeLocally(line);
+                }
+                space.repaint();
+            });
         }
+    }
 
-        System.out.println("[Client] " + nodes.size() + " node(s) reçu(s) du serveur.");
-
-        // 3. Exécuter chaque SNode côté client
-        for (SNode node : nodes) {
-            try {
+    private void executeLocally(String sExpression) {
+        try {
+            List<SNode> nodes = new SParser<SNode>().parse(sExpression);
+            for (SNode node : nodes) {
                 new Interpreter().compute(environment, node);
-            } catch (Exception e) {
-                System.err.println("[Client] Erreur d'exécution : " + e.getMessage());
             }
+        } catch (Exception ignored) {}
+    }
+
+    public void runScript(String sExpression) {
+        try {
+            sendToServer(sExpression);
+            localVersion = System.currentTimeMillis(); // On évite de se re-synchro soi-même
+            executeLocally(sExpression);
+            space.repaint();
+        } catch (IOException e) {
+            showErrorMessage("Erreur", "Serveur injoignable");
         }
     }
 
-    /**
-     * Boucle interactive : lit des S-Expressions depuis le clavier et les exécute.
-     */
-    public void mainLoop() {
-        System.out.println("[Client] Connecté à " + serverUrl);
-        System.out.println("[Client] Entrez une S-Expression (ex: (space setColor red))");
-        while (true) {
-            System.out.print("> ");
-            String input = Tools.readKeyboard();
-            if (input == null || input.equalsIgnoreCase("quit") || input.equalsIgnoreCase("exit")) {
-                System.out.println("[Client] Fin.");
-                break;
-            }
-            runScript(input);
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Communication HTTP
-    // -------------------------------------------------------------------------
-
-    /**
-     * Envoie la S-Expression au serveur en POST et retourne la réponse JSON brute.
-     */
     String sendToServer(String sExpression) throws IOException {
-        URL url = new URL(serverUrl + "/parse");
+        URL url = java.net.URI.create(serverUrl + "/parse").toURL();
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("POST");
-        connection.setRequestProperty("Content-Type", "text/plain; charset=UTF-8");
         connection.setDoOutput(true);
-        connection.setConnectTimeout(5000);
-        connection.setReadTimeout(10000);
-
-        // Envoi
         try (OutputStream os = connection.getOutputStream()) {
             os.write(sExpression.getBytes(StandardCharsets.UTF_8));
         }
-
-        // Lecture de la réponse
-        int code = connection.getResponseCode();
-        InputStream responseStream = (code >= 200 && code < 300)
-                ? connection.getInputStream()
-                : connection.getErrorStream();
-
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(responseStream, StandardCharsets.UTF_8))) {
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) sb.append(line);
-            String response = sb.toString();
-            if (code != 200) {
-                throw new IOException("Serveur a répondu " + code + " : " + response);
-            }
-            return response;
-        }
-    }
-    
-    public String getServerUrl() {
-        return this.serverUrl;
+        return new String(connection.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
     }
 
-    // -------------------------------------------------------------------------
-    // Point d'entrée
-    // -------------------------------------------------------------------------
+    private void showErrorMessage(String title, String message) {
+        SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, message, title, JOptionPane.ERROR_MESSAGE));
+    }
+
+    public GSpace getSpace() { return space; }
+    public String getServerUrl() { return serverUrl; }
 
     public static void main(String[] args) {
-        String serverUrl = DEFAULT_SERVER_URL;
-        if (args.length > 0) serverUrl = args[0];
-
-        SExpressionClient client = new SExpressionClient(serverUrl);
-        
-        // Au lieu de client.mainLoop(), on lance l'interface Swing
-        SwingUtilities.invokeLater(() -> {
-            ClientGUI gui = new ClientGUI(client);
-            gui.setVisible(true);
-        });
+        String url = (args.length > 0) ? args[0] : DEFAULT_SERVER_URL;
+        SExpressionClient client = new SExpressionClient(url);
+        SwingUtilities.invokeLater(() -> new ClientGUI(client).setVisible(true));
     }
 }
