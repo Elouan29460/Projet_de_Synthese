@@ -73,24 +73,31 @@ Fichiers dans le package `p2Exercice1_2_3/` (`client/`, `server/`, `shared/`).
 
 ---
 
-
-
-
-
-
-
-
-
-
 ## Éléments techniques
 
 ### Fonctionnement de l'interpréteur
 
 L'utilisateur écrit une S-expression → `SParser` la parse en `SNode` → `Interpreter` résout le receveur dans l'`Environment` → la `Reference` dispatch vers la bonne `Command` → la `Command` exécute l'action graphique.
 
-### Partie 2 — Client-serveur
+### Détails des composants de la Partie 2
 
-Le client envoie les S-expressions au serveur via HTTP POST. Le serveur parse, exécute et renvoie les `SNode` en JSON. Le client et le serveur ont chacun leur propre `GSpace`/`Environment` pour comparer les rendus.
+#### SExpressionServer (Le Serveur)
+Héberge un serveur HTTP (`com.sun.net.httpserver`) centralisant l'état de l'animation.
+- **Gestion d'état** : Maintient un `ServerSideRenderer` et une version d'état (`stateVersion`) incrémentée à chaque modification.
+- **Endpoints clés** : `/parse` pour l'exécution, `/version` pour la synchro, `/history` pour l'historique complet, et `/screenshot` pour l'export PNG.
+- **Persistance** : Gère la sauvegarde et le chargement de l'historique des scripts via `/save` et `/load`.
+
+#### SExpressionClient (Le Client Logique)
+Gère la communication réseau et la cohérence du rendu local.
+- **Synchronisation** : Un thread "démon" interroge `/version` chaque seconde. En cas de décalage, il récupère l'historique complet et reconstruit le `GSpace` local.
+- **Environnement** : Initialise les commandes (`setColor`, `addScript`, etc.) et les classes graphiques (`Rect`, `Oval`, `Label`).
+- **Mode Hybride** : Envoie les scripts au serveur tout en les exécutant localement pour assurer une interface fluide.
+
+#### ClientGUI (L'Interface Graphique)
+IDE Swing complet pour interagir avec le langage Robi.
+- **Éditeur** : Zone de texte pour l'écriture de S-expressions.
+- **Toolbar interactive** : Boutons de création rapide (Rectangle, Ovale), bouton de nettoyage (`clear`) et bouton de capture d'écran du rendu serveur.
+- **Double Vue** : Intègre l'éditeur de code et le composant de dessin `GSpace` dans un panneau scindé (`JSplitPane`).
 
 ### Choix de conception notables
 
