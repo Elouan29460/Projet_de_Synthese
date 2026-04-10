@@ -139,6 +139,73 @@ public class SExpressionClient {
         }
         return new String(connection.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
     }
+    
+    public void saveState(String filePath) {
+        try {
+            URL url = new URL(serverUrl + "/save");
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(10000);
+
+            int code = connection.getResponseCode();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) sb.append(line).append("\n");
+                String json = sb.toString();
+                if (code == 200) {
+                    java.nio.file.Files.writeString(
+                        java.nio.file.Path.of(filePath), json, StandardCharsets.UTF_8);
+                    System.out.println("[Client] État sauvegardé dans : " + filePath);
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("[Client] Erreur sauvegarde : " + e.getMessage());
+        }
+    }
+
+    public void loadState(String filePath) {
+        try {
+            String json = java.nio.file.Files.readString(
+                java.nio.file.Path.of(filePath), StandardCharsets.UTF_8);
+
+            URL url = new URL(serverUrl + "/load");
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("POST");
+            connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+            connection.setDoOutput(true);
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(10000);
+
+            try (OutputStream os = connection.getOutputStream()) {
+                os.write(json.getBytes(StandardCharsets.UTF_8));
+            }
+
+            int code = connection.getResponseCode();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) sb.append(line);
+                String responseJson = sb.toString();
+                if (code == 200) {
+                    List<SNode> nodes = SNodeSerializer.fromJson(responseJson);
+                    System.out.println("[Client] " + nodes.size() + " node(s) chargé(s).");
+                    for (SNode node : nodes) {
+                        try {
+                            new exercice6.Interpreter().compute(environment, node);
+                        } catch (Exception e) {
+                            System.err.println("[Client] Erreur exécution : " + e.getMessage());
+                        }
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("[Client] Erreur chargement : " + e.getMessage());
+        }
+    }
 
     private void showErrorMessage(String title, String message) {
         SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, message, title, JOptionPane.ERROR_MESSAGE));

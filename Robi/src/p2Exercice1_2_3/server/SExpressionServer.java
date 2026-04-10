@@ -11,10 +11,12 @@ import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import p2Exercice1_2_3.shared.*;
+import p2Exercice1_2_3.shared.PersistenceManager;
 
 public class SExpressionServer {
 
@@ -23,6 +25,8 @@ public class SExpressionServer {
     private final int port;
     private HttpServer httpServer;
     private final ServerSideRenderer serverRenderer;
+    
+    private final List<String> executedExpressions = new ArrayList<>();
         
     // --- SYNCHRONISATION ---
     // Version incrémentée à chaque modification pour notifier les clients
@@ -48,6 +52,8 @@ public class SExpressionServer {
         
         httpServer.setExecutor(null); 
         httpServer.start();
+        httpServer.createContext("/save", new SaveHandler());
+        httpServer.createContext("/load", new LoadHandler());
         
         System.out.println("[Server] Démarré sur port " + port);
 
@@ -92,6 +98,8 @@ public class SExpressionServer {
 
                 // --- 2. Rendu côté serveur ---
                 serverRenderer.render(sExpression);
+                
+                executedExpressions.add(sExpression);
                 
                 // --- 3. Notification : Mise à jour de la version ---
                 stateVersion.set(System.currentTimeMillis());
@@ -150,6 +158,53 @@ public class SExpressionServer {
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(bytes);
             }
+        }
+    }
+    
+    class SaveHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+            exchange.getResponseHeaders().add("Content-Type", "application/json; charset=UTF-8");
+            String json = PersistenceManager.toJson(executedExpressions);
+            System.out.println("[Server] Sauvegarde de " + executedExpressions.size() + " expression(s).");
+            sendResponse(exchange, 200, json);
+        }
+    }
+
+    class LoadHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+            exchange.getResponseHeaders().add("Content-Type", "application/json; charset=UTF-8");
+
+            String body;
+            try (InputStream is = exchange.getRequestBody()) {
+                body = new String(is.readAllBytes(), StandardCharsets.UTF_8).trim();
+            }
+
+            if (body.isEmpty()) {
+                sendResponse(exchange, 400, "{\"error\":\"Empty body\"}");
+                return;
+            }
+
+            List<String> expressions = PersistenceManager.loadFromJson(body);
+            System.out.println("[Server] Chargement de " + expressions.size() + " expression(s).");
+            executedExpressions.clear();
+
+            SParser<SNode> parser = new SParser<>();
+            List<SNode> allNodes = new ArrayList<>();
+            for (String expr : expressions) {
+                try {
+                    List<SNode> nodes = parser.parse(expr);
+                    allNodes.addAll(nodes);
+                    serverRenderer.render(expr);
+                    executedExpressions.add(expr);
+                } catch (Exception e) {
+                    System.err.println("[Server] Erreur parsing : " + e.getMessage());
+                }
+            }
+            sendResponse(exchange, 200, SNodeSerializer.toJson(allNodes));
         }
     }
 

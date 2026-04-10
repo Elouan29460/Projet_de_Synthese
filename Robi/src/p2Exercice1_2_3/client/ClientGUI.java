@@ -63,6 +63,45 @@ public class ClientGUI extends JFrame {
         sendButton.setForeground(Color.WHITE);
         sendButton.addActionListener(e -> client.runScript(commandArea.getText()));
         menuPanel.add(sendButton, BorderLayout.SOUTH);
+        
+     // --- BOUTON SAUVEGARDER ---
+        JButton saveBtn = new JButton("💾 Sauvegarder");
+        saveBtn.addActionListener(e -> {
+            JFileChooser chooser = new JFileChooser();
+            chooser.setDialogTitle("Sauvegarder l'état");
+            chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
+                "Fichiers JSON (*.json)", "json"));
+            int result = chooser.showSaveDialog(this);
+            if (result == JFileChooser.APPROVE_OPTION) {
+                String path = chooser.getSelectedFile().getAbsolutePath();
+                if (!path.endsWith(".json")) path += ".json";
+                client.saveState(path);
+                JOptionPane.showMessageDialog(this,
+                    "État sauvegardé dans :\n" + path,
+                    "Sauvegarde réussie",
+                    JOptionPane.INFORMATION_MESSAGE);
+            }
+        });
+        toolbar.add(saveBtn);
+
+        // --- BOUTON CHARGER ---
+        JButton loadBtn = new JButton("📂 Charger");
+        loadBtn.addActionListener(e -> {
+            JFileChooser chooser = new JFileChooser();
+            chooser.setDialogTitle("Charger un état");
+            chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
+                "Fichiers JSON (*.json)", "json"));
+            int result = chooser.showOpenDialog(this);
+            if (result == JFileChooser.APPROVE_OPTION) {
+                String path = chooser.getSelectedFile().getAbsolutePath();
+                client.loadState(path);
+                JOptionPane.showMessageDialog(this,
+                    "État chargé depuis :\n" + path,
+                    "Chargement réussi",
+                    JOptionPane.INFORMATION_MESSAGE);
+            }
+        });
+        toolbar.add(loadBtn);
 
 	     // --- PARTIE DROITE (DESSIN) ---
 	     // On récupère le composant de dessin à l'intérieur de GSpace
