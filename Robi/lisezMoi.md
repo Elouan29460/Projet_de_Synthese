@@ -85,18 +85,28 @@ L'utilisateur écrit une S-expression → `SParser` la parse en `SNode` → `Int
 Héberge un serveur HTTP (`com.sun.net.httpserver`) centralisant l'état de l'animation.
 - **Gestion d'état** : Maintient un `ServerSideRenderer` et une version d'état (`stateVersion`) incrémentée à chaque modification.
 - **Endpoints clés** : `/parse` pour l'exécution, `/version` pour la synchro, `/history` pour l'historique complet, et `/screenshot` pour l'export PNG.
-- **Persistance** : Gère la sauvegarde et le chargement de l'historique des scripts via `/save` et `/load`.
+- **Persistance** : Gère la sauvegarde et le chargement de l'historique des scripts
+  via `/save` (POST) et `/load` (GET). Le serveur sérialise l'ensemble des S-expressions
+  exécutées dans un fichier JSON, permettant de restaurer un état complet à la
+  reconnexion ou entre deux sessions.
 
 #### SExpressionClient (Le Client Logique)
 Gère la communication réseau et la cohérence du rendu local.
 - **Synchronisation** : Un thread "démon" interroge `/version` chaque seconde. En cas de décalage, il récupère l'historique complet et reconstruit le `GSpace` local.
 - **Environnement** : Initialise les commandes (`setColor`, `addScript`, etc.) et les classes graphiques (`Rect`, `Oval`, `Label`).
 - **Mode Hybride** : Envoie les scripts au serveur tout en les exécutant localement pour assurer une interface fluide.
+- **Sauvegarde/Chargement** : Expose deux méthodes dédiées qui appellent respectivement
+  `/save` et `/load` côté serveur. Au chargement, le client récupère l'historique
+  persisté, reconstruit le `GSpace` local en rejouant chaque commande, et resynchronise
+  l'affichage — garantissant la cohérence entre les deux rendus.
 
 #### ClientGUI (L'Interface Graphique)
 IDE Swing complet pour interagir avec le langage Robi.
 - **Éditeur** : Zone de texte pour l'écriture de S-expressions.
-- **Toolbar interactive** : Boutons de création rapide (Rectangle, Ovale), bouton de nettoyage (`clear`) et bouton de capture d'écran du rendu serveur.
+- **Toolbar interactive** : Boutons de création rapide (Rectangle, Ovale), bouton de
+  nettoyage (`clear`), bouton de capture d'écran du rendu serveur, ainsi que deux
+  boutons Sauvegarder et Charger qui déclenchent la persistance sans écrire
+  de S-expression manuellement.
 - **Double Vue** : Intègre l'éditeur de code et le composant de dessin `GSpace` dans un panneau scindé (`JSplitPane`).
 
 ### Choix de conception notables
@@ -105,7 +115,11 @@ IDE Swing complet pour interagir avec le langage Robi.
 - La partie 2 réutilise les classes de l'exercice 6.
 - `NewElement` instancie les éléments graphiques par réflexion.
 - Les scripts (exo 6) fonctionnent par substitution textuelle des paramètres dans le corps.
-- Sérialisation JSON faite main (pas de Gson/Jackson).
+- Sérialisation JSON faite main (pas de Gson/Jackson), utilisée aussi bien pour les
+  `SNode` que pour la persistance de l'historique via `PersistenceManager`.
+- La persistance est conçue côté serveur : c'est lui qui détient l'état de référence,
+  le client se contente de déclencher les opérations et de se resynchroniser après
+  un chargement.
 - Communication HTTP via `com.sun.net.httpserver` (serveur) et `HttpURLConnection` (client).
 
 ---
